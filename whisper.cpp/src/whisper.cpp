@@ -3504,20 +3504,24 @@ struct whisper_state * whisper_init_state(whisper_context * ctx) {
     }
 
 #ifdef WHISPER_USE_COREML
-    const auto path_coreml = whisper_get_coreml_path_encoder(ctx->path_model);
-
-    WHISPER_LOG_INFO("%s: loading Core ML model from '%s'\n", __func__, path_coreml.c_str());
-    WHISPER_LOG_INFO("%s: first run on a device may take a while ...\n", __func__);
-
-    state->ctx_coreml = whisper_coreml_init(path_coreml.c_str());
-    if (!state->ctx_coreml) {
-        WHISPER_LOG_ERROR("%s: failed to load Core ML model from '%s'\n", __func__, path_coreml.c_str());
-#ifndef WHISPER_COREML_ALLOW_FALLBACK
-        whisper_free_state(state);
-        return nullptr;
-#endif
+    if (!ctx->params.use_coreml) {
+        WHISPER_LOG_INFO("%s: Core ML encoder not requested (use_coreml = false), using the ggml encoder\n", __func__);
     } else {
-        WHISPER_LOG_INFO("%s: Core ML model loaded\n", __func__);
+        const auto path_coreml = whisper_get_coreml_path_encoder(ctx->path_model);
+
+        WHISPER_LOG_INFO("%s: loading Core ML model from '%s'\n", __func__, path_coreml.c_str());
+        WHISPER_LOG_INFO("%s: first run on a device may take a while ...\n", __func__);
+
+        state->ctx_coreml = whisper_coreml_init(path_coreml.c_str());
+        if (!state->ctx_coreml) {
+            WHISPER_LOG_ERROR("%s: failed to load Core ML model from '%s'\n", __func__, path_coreml.c_str());
+#ifndef WHISPER_COREML_ALLOW_FALLBACK
+            whisper_free_state(state);
+            return nullptr;
+#endif
+        } else {
+            WHISPER_LOG_INFO("%s: Core ML model loaded\n", __func__);
+        }
     }
 #endif
 
@@ -3698,6 +3702,8 @@ struct whisper_context_params whisper_context_default_params() {
             /*.heads            =*/ NULL,
         },
         /*.dtw_mem_size         =*/ 1024*1024*128,
+
+        /*.use_coreml           =*/ true,
     };
     return result;
 }
@@ -6014,6 +6020,15 @@ static void whisper_grammar_accept_token(whisper_context & ctx, whisper_grammar 
 //////////////
 
 ////////////////////////////////////////////////////////////////////////////
+
+bool whisper_state_uses_coreml(const struct whisper_state * state) {
+#ifdef WHISPER_USE_COREML
+    return state != nullptr && state->ctx_coreml != nullptr;
+#else
+    (void) state;
+    return false;
+#endif
+}
 
 struct whisper_context_params * whisper_context_default_params_by_ref(void) {
     struct whisper_context_params params = whisper_context_default_params();

@@ -126,6 +126,12 @@ extern "C" {
         struct whisper_aheads dtw_aheads;
 
         size_t dtw_mem_size; // TODO: remove
+
+        // Load the Core ML encoder (<model>-encoder.mlmodelc beside the model)
+        // when the state is created, in a build with WHISPER_COREML. Default
+        // true: upstream's behaviour, the file's presence decides. False keeps
+        // the ggml encoder even when the file is there. [fork: coreml-toggle]
+        bool use_coreml;
     };
 
     typedef struct whisper_token_data {
@@ -592,6 +598,11 @@ extern "C" {
 
     // NOTE: this function allocates memory, and it is the responsibility of the caller to free the pointer - see whisper_free_context_params & whisper_free_params()
     WHISPER_API struct whisper_context_params * whisper_context_default_params_by_ref(void);
+
+    // Whether this state runs the encoder through Core ML: a build with
+    // WHISPER_COREML, asked to (use_coreml), that loaded the encoder model.
+    // False otherwise, including after a fallback to ggml. [fork: coreml-toggle]
+    WHISPER_API bool whisper_state_uses_coreml(const struct whisper_state * state);
     WHISPER_API struct whisper_context_params   whisper_context_default_params       (void);
 
     WHISPER_API struct whisper_full_params * whisper_full_default_params_by_ref(enum whisper_sampling_strategy strategy);

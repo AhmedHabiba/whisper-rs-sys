@@ -5474,10 +5474,11 @@ pub struct whisper_context_params {
     pub dtw_n_top: ::std::os::raw::c_int,
     pub dtw_aheads: whisper_aheads,
     pub dtw_mem_size: usize,
+    pub use_coreml: bool,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of whisper_context_params"][::std::mem::size_of::<whisper_context_params>() - 48usize];
+    ["Size of whisper_context_params"][::std::mem::size_of::<whisper_context_params>() - 56usize];
     ["Alignment of whisper_context_params"]
         [::std::mem::align_of::<whisper_context_params>() - 8usize];
     ["Offset of field: whisper_context_params::use_gpu"]
@@ -5496,6 +5497,8 @@ const _: () = {
         [::std::mem::offset_of!(whisper_context_params, dtw_aheads) - 24usize];
     ["Offset of field: whisper_context_params::dtw_mem_size"]
         [::std::mem::offset_of!(whisper_context_params, dtw_mem_size) - 40usize];
+    ["Offset of field: whisper_context_params::use_coreml"]
+        [::std::mem::offset_of!(whisper_context_params, use_coreml) - 48usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -6215,6 +6218,9 @@ unsafe extern "C" {
     pub fn whisper_context_default_params_by_ref() -> *mut whisper_context_params;
 }
 unsafe extern "C" {
+    pub fn whisper_state_uses_coreml(state: *const whisper_state) -> bool;
+}
+unsafe extern "C" {
     pub fn whisper_context_default_params() -> whisper_context_params;
 }
 unsafe extern "C" {
@@ -6578,6 +6584,31 @@ unsafe extern "C" {
         state: *mut whisper_state,
         i_segment: ::std::os::raw::c_int,
     ) -> f32;
+}
+unsafe extern "C" {
+    pub fn ggml_backend_metal_init() -> ggml_backend_t;
+}
+unsafe extern "C" {
+    pub fn ggml_backend_is_metal(backend: ggml_backend_t) -> bool;
+}
+unsafe extern "C" {
+    pub fn ggml_backend_metal_set_abort_callback(
+        backend: ggml_backend_t,
+        abort_callback: ggml_abort_callback,
+        user_data: *mut ::std::os::raw::c_void,
+    );
+}
+unsafe extern "C" {
+    pub fn ggml_backend_metal_supports_family(
+        backend: ggml_backend_t,
+        family: ::std::os::raw::c_int,
+    ) -> bool;
+}
+unsafe extern "C" {
+    pub fn ggml_backend_metal_capture_next_compute(backend: ggml_backend_t);
+}
+unsafe extern "C" {
+    pub fn ggml_backend_metal_reg() -> ggml_backend_reg_t;
 }
 pub type __builtin_va_list = *mut ::std::os::raw::c_char;
 #[repr(C)]

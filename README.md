@@ -18,6 +18,11 @@ Licences are unchanged: `whisper-rs-sys` is Unlicense, whisper.cpp is MIT (`whis
 
 ## What we changed, and why
 
+**3. The Core ML encoder is a context parameter (branch `coreml-toggle`, 2026-09-16; Local Transcribe ADR 0021).**
+Upstream decides whether to run the encoder through Core ML by finding `<model>-encoder.mlmodelc` beside the model when the state is created. `whisper_context_params.use_coreml` (default `true`, so upstream's behaviour is unchanged) makes it a choice: `false` keeps the ggml encoder even when the file is there. `whisper_state_uses_coreml(state)` reports whether the Core ML encoder actually loaded — `false` after a fallback — so a caller can say which encoder ran instead of inferring it from the log. `src/bindings.rs` is regenerated. Two hunks in `whisper.cpp/src/whisper.cpp`, one in `include/whisper.h`.
+
+**4. `whisper-rs/` — whisper-rs 0.16.0 as published on crates.io, with the parameter exposed.** `WhisperContextParameters::use_coreml` (and the builder method) and `WhisperState::uses_coreml()`. Consumed through `[patch.crates-io]` from this same repository, so the one reviewed git source stays one. Unlicense, unchanged; `examples/` pruned.
+
 Two hunks in `build.rs`. Everything else is upstream.
 
 **1. Accept 1.9.x version declarations (required — the build fails without it).**
