@@ -41,6 +41,16 @@ impl WhisperState {
         Self { ctx, ptr }
     }
 
+    /// The state's raw stage counters — cumulative microseconds and call
+    /// counts since it was created — for a caller to difference around each
+    /// [`full`](Self::full). [fork: coreml-toggle]
+    ///
+    /// # C++ equivalent
+    /// `struct whisper_stage_timings whisper_state_stage_timings(const struct whisper_state * state)`
+    pub fn stage_timings(&self) -> whisper_rs_sys::whisper_stage_timings {
+        unsafe { whisper_rs_sys::whisper_state_stage_timings(self.ptr) }
+    }
+
     /// Whether this state runs the encoder through Core ML: a build with the
     /// `coreml` feature, asked to ([`crate::WhisperContextParameters::use_coreml`]),
     /// that loaded `<model>-encoder.mlmodelc`. False otherwise, including

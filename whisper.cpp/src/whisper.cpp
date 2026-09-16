@@ -4365,6 +4365,24 @@ struct whisper_timings * whisper_get_timings(struct whisper_context * ctx) {
     return timings;
 }
 
+struct whisper_stage_timings whisper_state_stage_timings(const struct whisper_state * state) {
+    struct whisper_stage_timings out = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    if (state == nullptr) {
+        return out;
+    }
+    out.sample_us = state->t_sample_us;
+    out.encode_us = state->t_encode_us;
+    out.decode_us = state->t_decode_us;
+    out.batchd_us = state->t_batchd_us;
+    out.prompt_us = state->t_prompt_us;
+    out.n_sample  = state->n_sample;
+    out.n_encode  = state->n_encode;
+    out.n_decode  = state->n_decode;
+    out.n_batchd  = state->n_batchd;
+    out.n_prompt  = state->n_prompt;
+    return out;
+}
+
 void whisper_print_timings(struct whisper_context * ctx) {
     const int64_t t_end_us = ggml_time_us();
 

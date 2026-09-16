@@ -452,6 +452,26 @@ extern "C" {
     WHISPER_API void whisper_print_timings(struct whisper_context * ctx);
     WHISPER_API void whisper_reset_timings(struct whisper_context * ctx);
 
+    // The raw stage counters of a state — cumulative microseconds and call
+    // counts since the state was created (or timings were reset) — so a
+    // caller with its own state can difference them around each
+    // whisper_full call. whisper_get_timings reads the context's default
+    // state and averages, neither of which serves a caller that keeps its
+    // own state. [fork: coreml-toggle]
+    struct whisper_stage_timings {
+        int64_t sample_us;
+        int64_t encode_us;
+        int64_t decode_us;
+        int64_t batchd_us;
+        int64_t prompt_us;
+        int32_t n_sample;
+        int32_t n_encode;
+        int32_t n_decode;
+        int32_t n_batchd;
+        int32_t n_prompt;
+    };
+    WHISPER_API struct whisper_stage_timings whisper_state_stage_timings(const struct whisper_state * state);
+
     // Print system information
     WHISPER_API const char * whisper_print_system_info(void);
 
