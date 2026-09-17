@@ -763,6 +763,12 @@ struct whisper_model {
     // tensors
     int n_loaded;
     std::map<std::string, struct ggml_tensor *> tensors;
+
+    // coreml-toggle: false when the context was created with use_coreml and
+    // the ggml encoder's tensors (every "encoder.*") were left out of the
+    // load — the Core ML encoder is then the only encoder, and a state whose
+    // Core ML model fails to load cannot fall back to ggml.
+    bool encoder_loaded = true;
 };
 
 struct whisper_partial_utf8 {
@@ -866,7 +872,11 @@ struct whisper_state {
 
     whisper_mel mel;
 
-    whisper_batch batch;
+    // coreml-toggle: value-initialised, so a state refused before
+    // whisper_batch_init runs (a kv cache, the Core ML model, the alignment
+    // heads failing to load) frees no garbage pointers in
+    // whisper_free_state. Upstream leaves it indeterminate.
+    whisper_batch batch = {};
 
     whisper_decoder decoders[WHISPER_MAX_DECODERS];
 
@@ -1759,10 +1769,22 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
 
         const int n_mels = hparams.n_mels;
 
-        model.layers_encoder.resize(n_audio_layer);
+        model.layers_encoder.resize(model.encoder_loaded ? n_audio_layer : 0);
         model.layers_decoder.resize(n_text_layer);
 
-        // encoder
+        // encoder — coreml-toggle: not created when the Core ML encoder is
+        // requested; whisper_encode_internal never touches them then (the
+        // conv graph takes the external encoder's output as its input, the
+        // encoder graph is not built), and the cross-attention projections
+        // are the decoder's.
+        model.e_pe = nullptr;
+        model.e_conv_1_w = nullptr;
+        model.e_conv_1_b = nullptr;
+        model.e_conv_2_w = nullptr;
+        model.e_conv_2_b = nullptr;
+        model.e_ln_w = nullptr;
+        model.e_ln_b = nullptr;
+        if (model.encoder_loaded) {
         model.e_pe = create_tensor(ASR_TENSOR_ENC_POS_EMBD, ASR_SYSTEM_ENCODER, ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_state, n_audio_ctx));
 
         model.e_conv_1_w = create_tensor(ASR_TENSOR_CONV1_WEIGHT, ASR_SYSTEM_ENCODER, ggml_new_tensor_3d(ctx, vtype, 3, n_mels, n_audio_state));
@@ -1800,6 +1822,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
             layer.attn_ln_1_w = create_tensor(ASR_TENSOR_ATTN_OUT_WEIGHT, ASR_SYSTEM_ENCODER, ggml_new_tensor_2d(ctx, wtype, n_audio_state, n_audio_state), i);
             layer.attn_ln_1_b = create_tensor(ASR_TENSOR_ATTN_OUT_BIAS, ASR_SYSTEM_ENCODER, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_state), i);
         }
+        } // encoder_loaded
 
         // decoder
         model.d_pe = create_tensor(ASR_TENSOR_DEC_POS_EMBD, ASR_SYSTEM_DECODER, ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_text_state, n_text_ctx));
@@ -1869,6 +1892,8 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
     // load weights
     {
         size_t total_size = 0;
+        size_t encoder_skipped_size = 0;
+        int n_encoder_skipped = 0;
 
         model.n_loaded = 0;
 
@@ -1906,6 +1931,21 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
             name.assign(&tmp[0], tmp.size());
 
             if (model.tensors.find(name) == model.tensors.end()) {
+                if (!model.encoder_loaded && name.rfind("encoder.", 0) == 0) {
+                    // coreml-toggle: the ggml encoder's data is read past,
+                    // never allocated.
+                    const ggml_type type = ggml_type(ttype);
+                    const size_t nbytes = (size_t) nelements / ggml_blck_size(type) * ggml_type_size(type);
+                    read_buf.resize(std::min<size_t>(nbytes, 4u << 20));
+                    for (size_t left = nbytes; left > 0; ) {
+                        const size_t chunk = std::min(left, read_buf.size());
+                        loader->read(loader->context, read_buf.data(), chunk);
+                        left -= chunk;
+                    }
+                    encoder_skipped_size += nbytes;
+                    n_encoder_skipped++;
+                    continue;
+                }
                 WHISPER_LOG_ERROR("%s: unknown tensor '%s' in model file\n", __func__, name.data());
                 return false;
             }
@@ -1951,6 +1991,9 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
         }
 
         WHISPER_LOG_INFO("%s: model size    = %7.2f MB\n", __func__, total_size/1e6);
+        if (!model.encoder_loaded) {
+            WHISPER_LOG_INFO("%s: ggml encoder not loaded (use_coreml): %d tensors, %7.2f MB read past\n", __func__, n_encoder_skipped, encoder_skipped_size/1e6);
+        }
 
         if (model.n_loaded == 0) {
             WHISPER_LOG_WARN("%s: WARN no tensors loaded from model file - assuming empty model for testing\n", __func__);
@@ -3515,6 +3558,13 @@ struct whisper_state * whisper_init_state(whisper_context * ctx) {
         state->ctx_coreml = whisper_coreml_init(path_coreml.c_str());
         if (!state->ctx_coreml) {
             WHISPER_LOG_ERROR("%s: failed to load Core ML model from '%s'\n", __func__, path_coreml.c_str());
+            if (!ctx->model.encoder_loaded) {
+                // coreml-toggle: nothing to fall back to — the ggml encoder
+                // was not loaded. The caller reloads without use_coreml.
+                WHISPER_LOG_ERROR("%s: no encoder: the ggml encoder was not loaded (use_coreml) and the Core ML encoder did not load\n", __func__);
+                whisper_free_state(state);
+                return nullptr;
+            }
 #ifndef WHISPER_COREML_ALLOW_FALLBACK
             whisper_free_state(state);
             return nullptr;
@@ -3808,6 +3858,13 @@ struct whisper_context * whisper_init_with_params_no_state(struct whisper_model_
 
     whisper_context * ctx = new whisper_context;
     ctx->params = params;
+#ifdef WHISPER_USE_COREML
+    // coreml-toggle: with the Core ML encoder requested, the ggml encoder's
+    // tensors stay out of memory — the Core ML model is the encoder, and a
+    // state whose Core ML model does not load is refused rather than run on
+    // an encoder that was never loaded (whisper_init_state).
+    ctx->model.encoder_loaded = !params.use_coreml;
+#endif
 
     // A C++ exception escaping this extern "C" function aborts non-C++ callers
     // (Rust via whisper-rs, Go via cgo, ...). whisper_model_load can throw
