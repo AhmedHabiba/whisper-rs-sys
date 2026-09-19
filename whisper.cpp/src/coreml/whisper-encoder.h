@@ -11,7 +11,8 @@ extern "C" {
 
 struct whisper_coreml_context;
 
-struct whisper_coreml_context * whisper_coreml_init(const char * path_model);
+// allow_gpu: MLComputeUnitsAll (upstream); false: MLComputeUnitsCPUAndNeuralEngine. [fork: coreml-toggle]
+struct whisper_coreml_context * whisper_coreml_init(const char * path_model, bool allow_gpu);
 void whisper_coreml_free(struct whisper_coreml_context * ctx);
 
 void whisper_coreml_encode(

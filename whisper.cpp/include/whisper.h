@@ -132,6 +132,13 @@ extern "C" {
         // true: upstream's behaviour, the file's presence decides. False keeps
         // the ggml encoder even when the file is there. [fork: coreml-toggle]
         bool use_coreml;
+
+        // Let Core ML place the encoder's ops on the GPU as well
+        // (MLComputeUnitsAll, upstream's choice; default true). False asks
+        // for MLComputeUnitsCPUAndNeuralEngine: a session that must not touch
+        // the GPU — iOS kills Metal work in a backgrounded app, not Neural
+        // Engine or CPU work — pairs it with use_gpu = false. [fork: coreml-toggle]
+        bool coreml_allow_gpu;
     };
 
     typedef struct whisper_token_data {

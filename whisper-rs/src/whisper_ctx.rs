@@ -472,6 +472,11 @@ pub struct WhisperContextParameters<'a> {
     /// true — upstream's behaviour, where the file's presence decides. False
     /// keeps the ggml encoder even when the file is there. [fork: coreml-toggle]
     pub use_coreml: bool,
+    /// Let Core ML place the encoder's ops on the GPU as well
+    /// (`MLComputeUnitsAll`, upstream's choice; default true). False asks for
+    /// `MLComputeUnitsCPUAndNeuralEngine`: a session that must not touch the
+    /// GPU pairs it with `use_gpu = false`. [fork: coreml-toggle]
+    pub coreml_allow_gpu: bool,
 }
 
 #[allow(clippy::derivable_impls)] // this impl cannot be derived
@@ -483,6 +488,7 @@ impl<'a> Default for WhisperContextParameters<'a> {
             gpu_device: 0,
             dtw_parameters: DtwParameters::default(),
             use_coreml: true,
+            coreml_allow_gpu: true,
         }
     }
 }
@@ -497,6 +503,11 @@ impl<'a> WhisperContextParameters<'a> {
     /// See [`WhisperContextParameters::use_coreml`].
     pub fn use_coreml(&mut self, use_coreml: bool) -> &mut Self {
         self.use_coreml = use_coreml;
+        self
+    }
+    /// See [`WhisperContextParameters::coreml_allow_gpu`].
+    pub fn coreml_allow_gpu(&mut self, allow: bool) -> &mut Self {
+        self.coreml_allow_gpu = allow;
         self
     }
     pub fn flash_attn(&mut self, flash_attn: bool) -> &mut Self {
@@ -600,6 +611,7 @@ impl<'a> WhisperContextParameters<'a> {
             dtw_aheads,
             dtw_mem_size: self.dtw_parameters.dtw_mem_size,
             use_coreml: self.use_coreml,
+            coreml_allow_gpu: self.coreml_allow_gpu,
         }
     }
 }

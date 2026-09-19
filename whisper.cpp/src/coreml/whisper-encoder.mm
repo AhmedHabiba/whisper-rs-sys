@@ -17,16 +17,16 @@ struct whisper_coreml_context {
     const void * data;
 };
 
-struct whisper_coreml_context * whisper_coreml_init(const char * path_model) {
+struct whisper_coreml_context * whisper_coreml_init(const char * path_model, bool allow_gpu) {
     NSString * path_model_str = [[NSString alloc] initWithUTF8String:path_model];
 
     NSURL * url_model = [NSURL fileURLWithPath: path_model_str];
 
-    // select which device to run the Core ML model on
+    // select which device to run the Core ML model on: upstream's All, or —
+    // for a session that must not touch the GPU — the CPU and the Neural
+    // Engine only. [fork: coreml-toggle]
     MLModelConfiguration *config = [[MLModelConfiguration alloc] init];
-    // config.computeUnits = MLComputeUnitsCPUAndGPU;
-    //config.computeUnits = MLComputeUnitsCPUAndNeuralEngine;
-    config.computeUnits = MLComputeUnitsAll;
+    config.computeUnits = allow_gpu ? MLComputeUnitsAll : MLComputeUnitsCPUAndNeuralEngine;
 
     const void * data = CFBridgingRetain([[whisper_encoder_impl alloc] initWithContentsOfURL:url_model configuration:config error:nil]);
 
