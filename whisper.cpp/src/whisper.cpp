@@ -856,6 +856,20 @@ struct whisper_state {
     int32_t n_prompt = 0; // number of decoder calls with n_tokens >  1  (prompt encoding)
     int32_t n_fail_p = 0; // number of logprob threshold failures
     int32_t n_fail_h = 0; // number of entropy threshold failures
+    int32_t n_encode_reused = 0; // encoder calls answered from the last pass [fork: coreml-toggle]
+
+    // What the last encoder pass consumed, so an identical request is
+    // answered from the K/V still in the state (whisper_context_params.
+    // reuse_encoder) [fork: coreml-toggle]
+    struct {
+        bool valid = false;
+        int offset = -1;
+        int n_audio_ctx = 0;
+        int n_len = 0;
+        int n_len_org = 0;
+        int n_mel = 0;
+        std::vector<float> mel;
+    } encoded;
 
     // number of decoders for which we have constructed the KV cache
     int32_t kv_self_n_dec = 0;
@@ -2439,6 +2453,21 @@ static bool whisper_encode_internal(
               const int   n_threads,
     ggml_abort_callback   abort_callback,
                    void * abort_callback_data) {
+    // [fork: coreml-toggle] The encoder's output is a function of the mel,
+    // the offset and the audio context alone, and no decode writes the
+    // cross-attention K/V it leaves in the state: an identical request is
+    // answered from the last pass.
+    if (wctx.params.reuse_encoder) {
+        const auto & e = wstate.encoded;
+        const auto & m = wstate.mel;
+        if (e.valid && e.offset == mel_offset && e.n_audio_ctx == wstate.exp_n_audio_ctx &&
+            e.n_len == m.n_len && e.n_len_org == m.n_len_org && e.n_mel == m.n_mel && e.mel == m.data) {
+            wstate.n_encode_reused++;
+            return !(abort_callback && abort_callback(abort_callback_data));
+        }
+    }
+    wstate.encoded.valid = false;
+
     const int64_t t_start_us = ggml_time_us();
 
     // conv
@@ -2543,6 +2572,17 @@ static bool whisper_encode_internal(
 
     wstate.t_encode_us += ggml_time_us() - t_start_us;
     wstate.n_encode++;
+
+    if (wctx.params.reuse_encoder) {
+        auto & e = wstate.encoded;
+        e.offset      = mel_offset;
+        e.n_audio_ctx = wstate.exp_n_audio_ctx;
+        e.n_len       = wstate.mel.n_len;
+        e.n_len_org   = wstate.mel.n_len_org;
+        e.n_mel       = wstate.mel.n_mel;
+        e.mel         = wstate.mel.data;
+        e.valid       = true;
+    }
 
     return !(abort_callback && abort_callback(abort_callback_data));
 }
@@ -3755,6 +3795,7 @@ struct whisper_context_params whisper_context_default_params() {
 
         /*.use_coreml           =*/ true,
         /*.coreml_allow_gpu     =*/ true,
+        /*.reuse_encoder        =*/ true,
     };
     return result;
 }
@@ -4424,7 +4465,7 @@ struct whisper_timings * whisper_get_timings(struct whisper_context * ctx) {
 }
 
 struct whisper_stage_timings whisper_state_stage_timings(const struct whisper_state * state) {
-    struct whisper_stage_timings out = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    struct whisper_stage_timings out = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     if (state == nullptr) {
         return out;
     }
@@ -4438,6 +4479,7 @@ struct whisper_stage_timings whisper_state_stage_timings(const struct whisper_st
     out.n_decode  = state->n_decode;
     out.n_batchd  = state->n_batchd;
     out.n_prompt  = state->n_prompt;
+    out.n_encode_reused = state->n_encode_reused;
     return out;
 }
 

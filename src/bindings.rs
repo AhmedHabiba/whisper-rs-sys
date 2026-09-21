@@ -5476,6 +5476,7 @@ pub struct whisper_context_params {
     pub dtw_mem_size: usize,
     pub use_coreml: bool,
     pub coreml_allow_gpu: bool,
+    pub reuse_encoder: bool,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
@@ -5502,6 +5503,8 @@ const _: () = {
         [::std::mem::offset_of!(whisper_context_params, use_coreml) - 48usize];
     ["Offset of field: whisper_context_params::coreml_allow_gpu"]
         [::std::mem::offset_of!(whisper_context_params, coreml_allow_gpu) - 49usize];
+    ["Offset of field: whisper_context_params::reuse_encoder"]
+        [::std::mem::offset_of!(whisper_context_params, reuse_encoder) - 50usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]

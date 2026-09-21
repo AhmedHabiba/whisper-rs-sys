@@ -139,6 +139,16 @@ extern "C" {
         // the GPU — iOS kills Metal work in a backgrounded app, not Neural
         // Engine or CPU work — pairs it with use_gpu = false. [fork: coreml-toggle]
         bool coreml_allow_gpu;
+
+        // Reuse the encoder's output when the state encodes the same mel at
+        // the same offset again (default true). whisper_full and
+        // whisper_lang_auto_detect each encode the window they are given, so
+        // a detection followed by the decode, or a second decode of the same
+        // window in another language, ran the encoder twice for one result;
+        // the cross-attention K/V the decoder reads are still in the state.
+        // False restores upstream's behaviour: every call encodes.
+        // [fork: coreml-toggle]
+        bool reuse_encoder;
     };
 
     typedef struct whisper_token_data {
@@ -476,6 +486,7 @@ extern "C" {
         int32_t n_decode;
         int32_t n_batchd;
         int32_t n_prompt;
+        int32_t n_encode_reused; // encoder calls answered from the state's last pass (reuse_encoder)
     };
     WHISPER_API struct whisper_stage_timings whisper_state_stage_timings(const struct whisper_state * state);
 

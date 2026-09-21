@@ -477,6 +477,14 @@ pub struct WhisperContextParameters<'a> {
     /// `MLComputeUnitsCPUAndNeuralEngine`: a session that must not touch the
     /// GPU pairs it with `use_gpu = false`. [fork: coreml-toggle]
     pub coreml_allow_gpu: bool,
+    /// Reuse the encoder's output when a state encodes the same mel at the
+    /// same offset again (default true): a language detection followed by
+    /// the decode, or a second decode of the same window in another
+    /// language, then costs one encoder pass, not two. False restores
+    /// upstream's behaviour. The reused calls are counted in
+    /// [`crate::WhisperState::stage_timings`]'s `n_encode_reused`.
+    /// [fork: coreml-toggle]
+    pub reuse_encoder: bool,
 }
 
 #[allow(clippy::derivable_impls)] // this impl cannot be derived
@@ -489,6 +497,7 @@ impl<'a> Default for WhisperContextParameters<'a> {
             dtw_parameters: DtwParameters::default(),
             use_coreml: true,
             coreml_allow_gpu: true,
+            reuse_encoder: true,
         }
     }
 }
@@ -508,6 +517,11 @@ impl<'a> WhisperContextParameters<'a> {
     /// See [`WhisperContextParameters::coreml_allow_gpu`].
     pub fn coreml_allow_gpu(&mut self, allow: bool) -> &mut Self {
         self.coreml_allow_gpu = allow;
+        self
+    }
+    /// See [`WhisperContextParameters::reuse_encoder`].
+    pub fn reuse_encoder(&mut self, reuse: bool) -> &mut Self {
+        self.reuse_encoder = reuse;
         self
     }
     pub fn flash_attn(&mut self, flash_attn: bool) -> &mut Self {
@@ -612,6 +626,7 @@ impl<'a> WhisperContextParameters<'a> {
             dtw_mem_size: self.dtw_parameters.dtw_mem_size,
             use_coreml: self.use_coreml,
             coreml_allow_gpu: self.coreml_allow_gpu,
+            reuse_encoder: self.reuse_encoder,
         }
     }
 }
